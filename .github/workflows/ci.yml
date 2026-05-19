@@ -41,11 +41,7 @@ jobs:
             source .venv/bin/activate
             pip install -r requirements.txt
             
-            # 3. 사용자 레벨 systemd 서비스 재시작
-            # SSH 비대화형 환경에서 D-Bus 연결을 위해 필요한 환경변수 설정
-            export XDG_RUNTIME_DIR=/run/user/$(id -u)
-            export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-            
-            systemctl --user daemon-reload
-            systemctl --user restart hyre-me-api || (journalctl --user -xeu hyre-me-api.service --no-pager; exit 1)
-            systemctl --user status hyre-me-api || true
+            # 3. systemd 서비스 재시작
+            sudo systemctl daemon-reload
+            sudo systemctl restart hyre-me-api || (sudo journalctl -xeu hyre-me-api.service --no-pager; exit 1)
+            sudo systemctl status hyre-me-api || true
