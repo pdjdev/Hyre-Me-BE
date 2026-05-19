@@ -1,7 +1,7 @@
 from datetime import datetime
 from fastapi import FastAPI
 
-app = FastAPI()
+app = FastAPI(title="hyre-me-BE", version="0.1.0", description="Hyre Me Backend API")
 
 @app.get(
     "/health", 
