@@ -94,27 +94,11 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
 
 @app.get("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 조회")
 def get_current_user_info(
-    authorization: str = Header(None),
-    db: Session = Depends(get_db)
+    current_user: models.User = Depends(auth.get_current_user)
 ):
     """
     현재 로그인한 사용자의 정보를 조회합니다.
     
     Authorization 헤더에 "Bearer {token}" 형식으로 토큰을 포함시켜야 합니다.
     """
-    if not authorization:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="토큰이 필요합니다."
-        )
-    
-    try:
-        token = authorization.split(" ")[1]
-    except IndexError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="토큰 형식이 올바르지 않습니다. 'Bearer {token}' 형식을 사용하세요."
-        )
-    
-    current_user = auth.get_current_user(token, db)
     return current_user
