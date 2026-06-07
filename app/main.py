@@ -15,7 +15,18 @@ load_dotenv()
 
 # models.Base.metadata.create_all(bind=engine) # 필요시 사용해 테이블을 자동 생성
 
-app = FastAPI(title="hyre-me-BE", version="0.1.0", description="Hyre Me Backend API")
+app = FastAPI(
+    title="hyre-me-BE",
+    version="0.1.0",
+    description="Hyre Me Backend API",
+    openapi_tags=[
+        {"name": "시스템", "description": "헬스 체크 및 서버 상태 확인 API"},
+        {"name": "계정", "description": "회원가입, 로그인, 내 정보 조회/수정 API"},
+        {"name": "포트폴리오", "description": "포트폴리오 기본 정보 및 경험 관리 API"},
+        {"name": "기업", "description": "목표 기업 관리 API"},
+        {"name": "자소서", "description": "자소서 생성 및 생성된 자소서 관리 API"},
+    ],
+)
 
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
@@ -31,10 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get(
-    "/health", 
-    summary="헬스 체크"
-)
+@app.get("/health", summary="헬스 체크", tags=["시스템"])
 def health_check():
     """
     서버 헬스 체크
@@ -44,10 +52,7 @@ def health_check():
     """
     return {"status": "ok"}
 
-@app.get(
-    "/current-time",
-    summary="현재 서버 시간 조회"
-)
+@app.get("/current-time", summary="현재 서버 시간 조회", tags=["시스템"])
 def current_time():
     """
     서버 시간 반환
@@ -57,7 +62,7 @@ def current_time():
     """
     return {"current_time": datetime.now().isoformat()}
 
-@app.post("/register", response_model=schemas.UserResponse, summary="회원 가입")
+@app.post("/register", response_model=schemas.UserResponse, summary="회원 가입", tags=["계정"])
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """
     이름, 이메일, 비밀번호를 이용해 회원가입합니다.
@@ -77,7 +82,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
-@app.post("/login", response_model=schemas.TokenResponse, summary="로그인")
+@app.post("/login", response_model=schemas.TokenResponse, summary="로그인", tags=["계정"])
 def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
     """
     이메일, 비밀번호를 이용해 로그인합니다.
@@ -99,7 +104,7 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
         "name": db_user.name
     }
 
-@app.get("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 조회")
+@app.get("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 조회", tags=["계정"])
 def get_current_user_info(
     current_user: models.User = Depends(auth.get_current_user)
 ):
@@ -110,7 +115,7 @@ def get_current_user_info(
     """
     return current_user
 
-@app.patch("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 수정")
+@app.patch("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 수정", tags=["계정"])
 def update_current_user_info(
     payload: schemas.UserUpdate,
     db: Session = Depends(get_db),

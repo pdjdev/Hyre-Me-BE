@@ -73,7 +73,7 @@ def _as_date_or_none(value):
     return value
 
 
-@router.get("/portfolio/profile", response_model=schemas.PortfolioProfileResponse, summary="포트폴리오 기본 정보 조회")
+@router.get("/portfolio/profile", response_model=schemas.PortfolioProfileResponse, summary="포트폴리오 기본 정보 조회", tags=["포트폴리오"])
 def get_portfolio_profile(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -82,7 +82,7 @@ def get_portfolio_profile(
     return profile
 
 
-@router.put("/portfolio/profile", response_model=schemas.PortfolioProfileResponse, summary="포트폴리오 기본 정보 저장/수정")
+@router.put("/portfolio/profile", response_model=schemas.PortfolioProfileResponse, summary="포트폴리오 기본 정보 저장/수정", tags=["포트폴리오"])
 def upsert_portfolio_profile(
     payload: schemas.PortfolioProfileUpsert,
     db: Session = Depends(get_db),
@@ -96,7 +96,7 @@ def upsert_portfolio_profile(
     return profile
 
 
-@router.post("/portfolio/profile/resume-upload", response_model=schemas.PortfolioProfileResponse, summary="기존 이력서 파일 업로드")
+@router.post("/portfolio/profile/resume-upload", response_model=schemas.PortfolioProfileResponse, summary="기존 이력서 파일 업로드", tags=["포트폴리오"])
 async def upload_resume_file(
     resume_file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -126,7 +126,7 @@ async def upload_resume_file(
     return profile
 
 
-@router.get("/portfolio/experiences", response_model=list[schemas.PortfolioExperienceResponse], summary="경험 리스트 조회")
+@router.get("/portfolio/experiences", response_model=list[schemas.PortfolioExperienceResponse], summary="경험 리스트 조회", tags=["포트폴리오"])
 def list_portfolio_experiences(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -140,7 +140,7 @@ def list_portfolio_experiences(
     )
 
 
-@router.post("/portfolio/experiences", response_model=schemas.PortfolioExperienceResponse, summary="경험 추가하기")
+@router.post("/portfolio/experiences", response_model=schemas.PortfolioExperienceResponse, summary="경험 추가하기", tags=["포트폴리오"])
 def create_portfolio_experience(
     payload: schemas.PortfolioExperienceCreate,
     db: Session = Depends(get_db),
@@ -153,7 +153,7 @@ def create_portfolio_experience(
     return experience
 
 
-@router.get("/portfolio/experiences/{experienceId}", response_model=schemas.PortfolioExperienceResponse, summary="경험 상세 조회")
+@router.get("/portfolio/experiences/{experienceId}", response_model=schemas.PortfolioExperienceResponse, summary="경험 상세 조회", tags=["포트폴리오"])
 def get_portfolio_experience(
     experienceId: int,
     db: Session = Depends(get_db),
@@ -172,7 +172,7 @@ def get_portfolio_experience(
     return experience
 
 
-@router.patch("/portfolio/experiences/{experienceId}", response_model=schemas.PortfolioExperienceResponse, summary="경험 수정")
+@router.patch("/portfolio/experiences/{experienceId}", response_model=schemas.PortfolioExperienceResponse, summary="경험 수정", tags=["포트폴리오"])
 def update_portfolio_experience(
     experienceId: int,
     payload: schemas.PortfolioExperienceUpdate,
@@ -202,7 +202,7 @@ def update_portfolio_experience(
     return experience
 
 
-@router.delete("/portfolio/experiences/{experienceId}", status_code=status.HTTP_204_NO_CONTENT, summary="경험 삭제")
+@router.delete("/portfolio/experiences/{experienceId}", status_code=status.HTTP_204_NO_CONTENT, summary="경험 삭제", tags=["포트폴리오"])
 def delete_portfolio_experience(
     experienceId: int,
     db: Session = Depends(get_db),
@@ -224,7 +224,7 @@ def delete_portfolio_experience(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.put("/portfolio", response_model=schemas.PortfolioSaveResponse, summary="포트폴리오 전체 저장")
+@router.put("/portfolio", response_model=schemas.PortfolioSaveResponse, summary="포트폴리오 전체 저장", tags=["포트폴리오"])
 def save_full_portfolio(
     payload: schemas.PortfolioSaveRequest,
     db: Session = Depends(get_db),
@@ -292,7 +292,7 @@ def save_full_portfolio(
     }
 
 
-@router.get("/portfolio/certifications", response_model=list[schemas.PortfolioCertificationResponse], summary="자격증 리스트 조회")
+@router.get("/portfolio/certifications", response_model=list[schemas.PortfolioCertificationResponse], summary="자격증 리스트 조회", tags=["포트폴리오"])
 def list_certifications(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -305,7 +305,7 @@ def list_certifications(
     )
 
 
-@router.post("/portfolio/certifications", response_model=schemas.PortfolioCertificationResponse, summary="자격증 추가")
+@router.post("/portfolio/certifications", response_model=schemas.PortfolioCertificationResponse, summary="자격증 추가", tags=["포트폴리오"])
 def create_certification(
     payload: schemas.PortfolioCertificationCreate,
     db: Session = Depends(get_db),
@@ -321,7 +321,7 @@ def create_certification(
     return certification
 
 
-@router.get("/portfolio/certifications/{certificationId}", response_model=schemas.PortfolioCertificationResponse, summary="자격증 상세 조회")
+@router.get("/portfolio/certifications/{certificationId}", response_model=schemas.PortfolioCertificationResponse, summary="자격증 상세 조회", tags=["포트폴리오"])
 def get_certification(
     certificationId: int,
     db: Session = Depends(get_db),
@@ -340,7 +340,7 @@ def get_certification(
     return certification
 
 
-@router.patch("/portfolio/certifications/{certificationId}", response_model=schemas.PortfolioCertificationResponse, summary="자격증 수정")
+@router.patch("/portfolio/certifications/{certificationId}", response_model=schemas.PortfolioCertificationResponse, summary="자격증 수정", tags=["포트폴리오"])
 def update_certification(
     certificationId: int,
     payload: schemas.PortfolioCertificationUpdate,
@@ -370,7 +370,7 @@ def update_certification(
     return certification
 
 
-@router.delete("/portfolio/certifications/{certificationId}", status_code=status.HTTP_204_NO_CONTENT, summary="자격증 삭제")
+@router.delete("/portfolio/certifications/{certificationId}", status_code=status.HTTP_204_NO_CONTENT, summary="자격증 삭제", tags=["포트폴리오"])
 def delete_certification(
     certificationId: int,
     db: Session = Depends(get_db),
@@ -392,7 +392,7 @@ def delete_certification(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/portfolio/languages", response_model=list[schemas.PortfolioLanguageResponse], summary="어학 성적 리스트 조회")
+@router.get("/portfolio/languages", response_model=list[schemas.PortfolioLanguageResponse], summary="어학 성적 리스트 조회", tags=["포트폴리오"])
 def list_languages(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -405,7 +405,7 @@ def list_languages(
     )
 
 
-@router.post("/portfolio/languages", response_model=schemas.PortfolioLanguageResponse, summary="어학 성적 추가")
+@router.post("/portfolio/languages", response_model=schemas.PortfolioLanguageResponse, summary="어학 성적 추가", tags=["포트폴리오"])
 def create_language(
     payload: schemas.PortfolioLanguageCreate,
     db: Session = Depends(get_db),
@@ -420,7 +420,7 @@ def create_language(
     return language
 
 
-@router.get("/portfolio/languages/{languageId}", response_model=schemas.PortfolioLanguageResponse, summary="어학 성적 상세 조회")
+@router.get("/portfolio/languages/{languageId}", response_model=schemas.PortfolioLanguageResponse, summary="어학 성적 상세 조회", tags=["포트폴리오"])
 def get_language(
     languageId: int,
     db: Session = Depends(get_db),
@@ -439,7 +439,7 @@ def get_language(
     return language
 
 
-@router.patch("/portfolio/languages/{languageId}", response_model=schemas.PortfolioLanguageResponse, summary="어학 성적 수정")
+@router.patch("/portfolio/languages/{languageId}", response_model=schemas.PortfolioLanguageResponse, summary="어학 성적 수정", tags=["포트폴리오"])
 def update_language(
     languageId: int,
     payload: schemas.PortfolioLanguageUpdate,
@@ -469,7 +469,7 @@ def update_language(
     return language
 
 
-@router.delete("/portfolio/languages/{languageId}", status_code=status.HTTP_204_NO_CONTENT, summary="어학 성적 삭제")
+@router.delete("/portfolio/languages/{languageId}", status_code=status.HTTP_204_NO_CONTENT, summary="어학 성적 삭제", tags=["포트폴리오"])
 def delete_language(
     languageId: int,
     db: Session = Depends(get_db),
@@ -491,7 +491,7 @@ def delete_language(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/companies", response_model=list[schemas.CompanyResponse], summary="목표 기업 목록 조회")
+@router.get("/companies", response_model=list[schemas.CompanyResponse], summary="목표 기업 목록 조회", tags=["기업"])
 def list_companies(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -504,7 +504,7 @@ def list_companies(
     )
 
 
-@router.post("/companies", response_model=schemas.CompanyResponse, summary="목표 기업 추가")
+@router.post("/companies", response_model=schemas.CompanyResponse, summary="목표 기업 추가", tags=["기업"])
 def create_company(
     payload: schemas.CompanyCreate,
     db: Session = Depends(get_db),
@@ -517,7 +517,7 @@ def create_company(
     return company
 
 
-@router.get("/companies/{companyId}", response_model=schemas.CompanyResponse, summary="목표 기업 상세 조회")
+@router.get("/companies/{companyId}", response_model=schemas.CompanyResponse, summary="목표 기업 상세 조회", tags=["기업"])
 def get_company(
     companyId: int,
     db: Session = Depends(get_db),
@@ -533,7 +533,7 @@ def get_company(
     return company
 
 
-@router.patch("/companies/{companyId}", response_model=schemas.CompanyResponse, summary="목표 기업 수정")
+@router.patch("/companies/{companyId}", response_model=schemas.CompanyResponse, summary="목표 기업 수정", tags=["기업"])
 def update_company(
     companyId: int,
     payload: schemas.CompanyUpdate,
@@ -560,7 +560,7 @@ def update_company(
     return company
 
 
-@router.delete("/companies/{companyId}", status_code=status.HTTP_204_NO_CONTENT, summary="목표 기업 삭제")
+@router.delete("/companies/{companyId}", status_code=status.HTTP_204_NO_CONTENT, summary="목표 기업 삭제", tags=["기업"])
 def delete_company(
     companyId: int,
     db: Session = Depends(get_db),
@@ -579,7 +579,7 @@ def delete_company(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/resumes/generate", status_code=status.HTTP_501_NOT_IMPLEMENTED, summary="자소서 생성 요청")
+@router.post("/resumes/generate", status_code=status.HTTP_501_NOT_IMPLEMENTED, summary="자소서 생성 요청", tags=["자소서"])
 def generate_resume(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -590,7 +590,7 @@ def generate_resume(
     )
 
 
-@router.get("/resumes/{resumeId}/status", response_model=schemas.GeneratedResumeStatusResponse, summary="자소서 생성 상태 조회")
+@router.get("/resumes/{resumeId}/status", response_model=schemas.GeneratedResumeStatusResponse, summary="자소서 생성 상태 조회", tags=["자소서"])
 def get_generated_resume_status(
     resumeId: int,
     db: Session = Depends(get_db),
@@ -606,7 +606,7 @@ def get_generated_resume_status(
     return resume
 
 
-@router.get("/resumes/companies", response_model=list[schemas.ResumeCompanyOption], summary="생성 가능한 기업 목록 조회")
+@router.get("/resumes/companies", response_model=list[schemas.ResumeCompanyOption], summary="생성 가능한 기업 목록 조회", tags=["자소서"])
 def list_resume_companies(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -619,7 +619,7 @@ def list_resume_companies(
     )
 
 
-@router.get("/resumes", response_model=list[schemas.GeneratedResumeResponse], summary="생성된 자소서 목록 조회")
+@router.get("/resumes", response_model=list[schemas.GeneratedResumeResponse], summary="생성된 자소서 목록 조회", tags=["자소서"])
 def list_generated_resumes(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
@@ -632,7 +632,7 @@ def list_generated_resumes(
     )
 
 
-@router.get("/resumes/{resumeId}", response_model=schemas.GeneratedResumeResponse, summary="생성된 자소서 상세 조회")
+@router.get("/resumes/{resumeId}", response_model=schemas.GeneratedResumeResponse, summary="생성된 자소서 상세 조회", tags=["자소서"])
 def get_generated_resume(
     resumeId: int,
     db: Session = Depends(get_db),
@@ -648,7 +648,7 @@ def get_generated_resume(
     return resume
 
 
-@router.delete("/resumes/{resumeId}", status_code=status.HTTP_204_NO_CONTENT, summary="생성된 자소서 삭제")
+@router.delete("/resumes/{resumeId}", status_code=status.HTTP_204_NO_CONTENT, summary="생성된 자소서 삭제", tags=["자소서"])
 def delete_generated_resume(
     resumeId: int,
     db: Session = Depends(get_db),
