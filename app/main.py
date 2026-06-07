@@ -102,3 +102,30 @@ def get_current_user_info(
     Authorization 헤더에 "Bearer {token}" 형식으로 토큰을 포함시켜야 합니다.
     """
     return current_user
+
+@app.patch("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 수정")
+def update_current_user_info(
+    payload: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """
+    현재 로그인한 사용자의 이름 또는 비밀번호를 수정합니다.
+
+    이름과 비밀번호 중 하나 이상을 보내야 합니다.
+    """
+    if payload.name is None and payload.password is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="수정할 정보를 하나 이상 제공해야 합니다."
+        )
+
+    if payload.name is not None:
+        current_user.name = payload.name
+
+    if payload.password is not None:
+        current_user.password = auth.get_password_hash(payload.password)
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
