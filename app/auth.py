@@ -3,7 +3,7 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -51,14 +51,29 @@ def verify_token(token: str) -> dict:
             detail="토큰이 유효하지 않습니다."
         )
 
-def get_current_user(token: str, db: Session = Depends(get_db)) -> models.User:
-    """현재 로그인한 사용자 조회"""
-    if not token:
+def get_token_from_request(request: Request) -> str:
+    """Authorization 헤더에서 토큰 추출"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="토큰이 필요합니다."
+            detail="Authorization 헤더가 필요합니다."
         )
     
+    try:
+        scheme, token = auth_header.split()
+        if scheme.lower() != "bearer":
+            raise ValueError("Invalid auth scheme")
+        return token
+    except (ValueError, IndexError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="유효하지 않은 Authorization 헤더 형식입니다. (Bearer token 형식이어야 합니다)"
+        )
+
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> models.User:
+    """현재 로그인한 사용자 조회"""
+    token = get_token_from_request(request)
     token_data = verify_token(token)
     user = db.query(models.User).filter(models.User.id == token_data["user_id"]).first()
     
