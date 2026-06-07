@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, constr
 from typing import Optional
 from datetime import datetime
 
@@ -20,6 +20,10 @@ class UserResponse(BaseModel):
     class Config:
         orm_mode = True
         from_attributes = True
+
+class UserUpdate(BaseModel):
+    name: Optional[constr(min_length=1)] = None
+    password: Optional[constr(min_length=1)] = None
 
 class TokenResponse(BaseModel):
     access_token: str
