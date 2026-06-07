@@ -71,9 +71,8 @@ def get_token_from_request(request: Request) -> str:
             detail="유효하지 않은 Authorization 헤더 형식입니다. (Bearer token 형식이어야 합니다)"
         )
 
-def get_current_user(request: Request, db: Session = Depends(get_db)) -> models.User:
+def get_current_user(token: str, db: Session = Depends(get_db)) -> models.User:
     """현재 로그인한 사용자 조회"""
-    token = get_token_from_request(request)
     token_data = verify_token(token)
     user = db.query(models.User).filter(models.User.id == token_data["user_id"]).first()
     
