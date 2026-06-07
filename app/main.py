@@ -1,12 +1,11 @@
 from datetime import datetime
 from fastapi import FastAPI, Depends, HTTPException, status, Header
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
 from sqlalchemy.orm import Session
 
 from app.database import get_db, engine
 from app import models, schemas, auth
 
-# models.Base.metadata.create_all(bind=engine) # 필요시 사용해 테이블을 자동 생성합니다.
+# models.Base.metadata.create_all(bind=engine) # 필요시 사용해 테이블을 자동 생성
 
 app = FastAPI(title="hyre-me-BE", version="0.1.0", description="Hyre Me Backend API")
 
