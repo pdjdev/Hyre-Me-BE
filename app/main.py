@@ -1,13 +1,28 @@
 from datetime import datetime
+import os
 from fastapi import FastAPI, Depends, HTTPException, status, Header
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from dotenv import load_dotenv
 
 from app.database import get_db, engine
 from app import models, schemas, auth
 
+load_dotenv()
+
 # models.Base.metadata.create_all(bind=engine) # 필요시 사용해 테이블을 자동 생성
 
 app = FastAPI(title="hyre-me-BE", version="0.1.0", description="Hyre Me Backend API")
+
+# CORS 설정
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get(
     "/health", 
