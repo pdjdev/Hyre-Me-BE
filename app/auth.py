@@ -3,14 +3,16 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 from app.database import get_db
-from app import models
+from app import models, schemas
 
 load_dotenv()
+
+router = APIRouter(prefix="/api/auth", tags=["계정"])
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key_here_change_this_in_production")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
@@ -88,3 +90,87 @@ def get_current_user(token: str = Depends(get_token_from_request), db: Session =
         )
     
     return user
+
+
+@router.post("/register", response_model=schemas.UserResponse, summary="회원 가입")
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    """
+    이름, 이메일, 비밀번호를 이용해 회원가입합니다.
+    """
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다.")
+
+    hashed_password = get_password_hash(user.password)
+    new_user = models.User(
+        name=user.name,
+        email=user.email,
+        password=hashed_password
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+
+@router.post("/login", response_model=schemas.TokenResponse, summary="로그인")
+def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
+    """
+    이메일, 비밀번호를 이용해 로그인합니다.
+
+    응답에서 받은 access_token을 Authorization 헤더에 "Bearer {token}" 형식으로 포함시켜 인증된 요청을 보냅니다.
+    """
+    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    if not db_user or not verify_password(user.password, db_user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="이메일 또는 비밀번호가 올바르지 않습니다."
+        )
+
+    access_token = create_access_token(data={"sub": db_user.id})
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": db_user.id,
+        "name": db_user.name
+    }
+
+
+@router.get("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 조회")
+def get_current_user_info(
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    현재 로그인한 사용자의 정보를 조회합니다.
+
+    Authorization 헤더에 "Bearer {token}" 형식으로 토큰을 포함시켜야 합니다.
+    """
+    return current_user
+
+
+@router.patch("/me", response_model=schemas.UserResponse, summary="현재 사용자 정보 수정")
+def update_current_user_info(
+    payload: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    현재 로그인한 사용자의 이름 또는 비밀번호를 수정합니다.
+
+    이름과 비밀번호 중 하나 이상을 보내야 합니다.
+    """
+    if payload.name is None and payload.password is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="수정할 정보를 하나 이상 제공해야 합니다."
+        )
+
+    if payload.name is not None:
+        current_user.name = payload.name
+
+    if payload.password is not None:
+        current_user.password = get_password_hash(payload.password)
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
