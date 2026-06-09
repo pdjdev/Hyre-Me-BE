@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/auth", tags=["계정"])
 SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key_here_change_this_in_production")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 PASSWORD_SALT = os.getenv("PASSWORD_SALT", "default_salt_change_in_production")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -27,31 +28,53 @@ def get_password_hash(password: str) -> str:
     """비밀번호 해싱 (SHA256 + 솔트)"""
     return hashlib.sha256(f"{password}{PASSWORD_SALT}".encode()).hexdigest()
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def _create_token(data: dict, token_type: str, expires_delta: Optional[timedelta] = None) -> tuple[str, datetime]:
     """JWT 토큰 생성"""
     to_encode = data.copy()
     if "sub" in to_encode:
         to_encode["sub"] = str(to_encode["sub"])
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
+    elif token_type == "refresh":
+        expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "token_type": token_type})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return encoded_jwt, expire
 
-def verify_token(token: str) -> dict:
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    token, _ = _create_token(data=data, token_type="access", expires_delta=expires_delta)
+    return token
+
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    token, _ = _create_token(data=data, token_type="refresh", expires_delta=expires_delta)
+    return token
+
+
+def create_refresh_token_with_expiry(data: dict, expires_delta: Optional[timedelta] = None) -> tuple[str, datetime]:
+    return _create_token(data=data, token_type="refresh", expires_delta=expires_delta)
+
+def verify_token(token: str, expected_token_type: str = "access") -> dict:
     """JWT 토큰 검증 및 데이터 추출"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
+        token_type = payload.get("token_type")
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="유효하지 않은 토큰입니다."
             )
-        return {"user_id": int(user_id)}
+        if token_type != expected_token_type:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="토큰 유형이 올바르지 않습니다."
+            )
+        return {"user_id": int(user_id), "token_type": token_type}
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,7 +103,7 @@ def get_token_from_request(request: Request) -> str:
 
 def get_current_user(token: str = Depends(get_token_from_request), db: Session = Depends(get_db)) -> models.User:
     """현재 로그인한 사용자 조회"""
-    token_data = verify_token(token)
+    token_data = verify_token(token, expected_token_type="access")
     user = db.query(models.User).filter(models.User.id == token_data["user_id"]).first()
     
     if user is None:
@@ -128,8 +151,72 @@ def login_user(user: schemas.UserLogin, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token(data={"sub": db_user.id})
+    refresh_token, refresh_expires_at = create_refresh_token_with_expiry(data={"sub": db_user.id})
+
+    existing_refresh_token = (
+        db.query(models.UserRefreshToken)
+        .filter(models.UserRefreshToken.user_id == db_user.id)
+        .first()
+    )
+
+    if existing_refresh_token:
+        existing_refresh_token.token = refresh_token
+        existing_refresh_token.expires_at = refresh_expires_at
+    else:
+        existing_refresh_token = models.UserRefreshToken(
+            user_id=db_user.id,
+            token=refresh_token,
+            expires_at=refresh_expires_at,
+        )
+        db.add(existing_refresh_token)
+
+    db.commit()
+
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user_id": db_user.id,
+        "name": db_user.name
+    }
+
+
+@router.post("/refresh", response_model=schemas.TokenResponse, summary="토큰 재발급")
+def refresh_token(payload: schemas.RefreshTokenRequest, db: Session = Depends(get_db)):
+    """
+    Refresh Token을 검증하고 새 Access Token 및 Refresh Token을 발급합니다.
+    """
+    token_data = verify_token(payload.refresh_token, expected_token_type="refresh")
+
+    stored_refresh_token = (
+        db.query(models.UserRefreshToken)
+        .filter(models.UserRefreshToken.user_id == token_data["user_id"])
+        .first()
+    )
+
+    if not stored_refresh_token or stored_refresh_token.token != payload.refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="저장된 리프레시 토큰과 일치하지 않습니다."
+        )
+
+    db_user = db.query(models.User).filter(models.User.id == token_data["user_id"]).first()
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="사용자를 찾을 수 없습니다."
+        )
+
+    access_token = create_access_token(data={"sub": db_user.id})
+    new_refresh_token, new_refresh_expires_at = create_refresh_token_with_expiry(data={"sub": db_user.id})
+
+    stored_refresh_token.token = new_refresh_token
+    stored_refresh_token.expires_at = new_refresh_expires_at
+    db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "user_id": db_user.id,
         "name": db_user.name

@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import Column, BigInteger, String, TIMESTAMP, Text, Date, Integer
+from sqlalchemy import Column, BigInteger, String, TIMESTAMP, Text, Date, Integer, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -10,6 +10,23 @@ class User(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password = Column(String(255), nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+
+class UserRefreshToken(Base):
+    __tablename__ = os.getenv("DB_TABLE_USER_REFRESH_TOKENS", "user_refresh_tokens")
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(
+        BigInteger,
+        ForeignKey(f"{os.getenv('DB_TABLE_USERS', 'users')}.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    token = Column(String(512), nullable=False)
+    expires_at = Column(TIMESTAMP, nullable=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
