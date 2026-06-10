@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app import auth, models, schemas
 from app.database import get_db
 
+from app.ai_service import extract_portfolio_data_with_ai
+
 router = APIRouter(prefix="/api")
 
 UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "uploads"
@@ -96,7 +98,7 @@ def upsert_portfolio_profile(
     return profile
 
 
-@router.post("/portfolio/profile/resume-upload", response_model=schemas.PortfolioProfileResponse, summary="기존 이력서 파일 업로드", tags=["포트폴리오"])
+@router.post("/portfolio/profile/resume-upload", response_model=schemas.PortfolioProfileResponse, summary="기존 이력서 파일 업로드 및 AI 분석", tags=["포트폴리오"])
 async def upload_resume_file(
     resume_file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -116,13 +118,54 @@ async def upload_resume_file(
     stored_name = f"user-{user_id}-{uuid4().hex}-{safe_filename}"
     stored_path = RESUME_UPLOAD_DIR / stored_name
 
+    # 1. 파일을 서버(uploads/resumes 폴더)에 저장
     content = await resume_file.read()
     stored_path.write_bytes(content)
 
+    # 2. 내 프로필 DB에 파일 경로 업데이트
     profile = _get_or_create_profile(db, user_id)
     profile.resume_file_url = f"{RESUME_FILE_PATH_PREFIX}/{stored_name}"
+
+    # 3. 방금 저장한 파일을 AI에게 보내서 데이터 추출
+    ai_data = extract_portfolio_data_with_ai(str(stored_path))
+    
+    # 4. 추출된 데이터를 각 DB 테이블에 저장
+    # 4-1. 경험 (Experiences)
+    for exp_data in ai_data.get("experiences", []):
+        new_exp = models.PortfolioExperience(user_id=user_id, **exp_data)
+        db.add(new_exp)
+        
+    # 4-2. 자격증 (Certifications)
+    for cert_data in ai_data.get("certifications", []):
+        # AI가 준 날짜 문자열("YYYY-MM-DD")을 파이썬 date 객체로 변환
+        acq_date = cert_data.get("acquired_date")
+        parsed_date = None
+        if acq_date and isinstance(acq_date, str) and acq_date.strip():
+            try:
+                parsed_date = date.fromisoformat(acq_date[:10]) # YYYY-MM-DD 자르기
+            except ValueError:
+                pass
+        cert_data["acquired_date"] = parsed_date
+        new_cert = models.PortfolioCertification(user_id=user_id, **cert_data)
+        db.add(new_cert)
+        
+    # 4-3. 어학 성적 (Languages)
+    for lang_data in ai_data.get("languages", []):
+        acq_date = lang_data.get("acquired_date")
+        parsed_date = None
+        if acq_date and isinstance(acq_date, str) and acq_date.strip():
+            try:
+                parsed_date = date.fromisoformat(acq_date[:10])
+            except ValueError:
+                pass
+        lang_data["acquired_date"] = parsed_date
+        new_lang = models.PortfolioLanguage(user_id=user_id, **lang_data)
+        db.add(new_lang)
+
+    # 5. DB에 모두 저장(Commit)
     _commit_or_rollback(db)
     db.refresh(profile)
+    
     return profile
 
 
