@@ -10,9 +10,6 @@ load_dotenv()
 # 클라이언트 초기화
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# .env에서 모델 이름 추출 (.env에 없을 경우 기본값으로 'gemini-2.5-flash' 사용)
-GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
-
 PORTFOLIO_RESPONSE_SCHEMA = types.Schema(
     type=types.Type.OBJECT,
     required=["experiences", "certifications", "languages"],
