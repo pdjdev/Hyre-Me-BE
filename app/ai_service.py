@@ -1,6 +1,7 @@
 import os
 import json
 import mimetypes
+from datetime import datetime, date
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -9,6 +10,9 @@ load_dotenv()
 
 # 클라이언트 초기화
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+# .env에서 모델 이름 추출 (.env에 없을 경우 기본값으로 'gemini-2.5-flash' 사용)
+GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
 
 PORTFOLIO_RESPONSE_SCHEMA = types.Schema(
     type=types.Type.OBJECT,
@@ -180,3 +184,110 @@ def extract_portfolio_data_with_ai(file_path: str) -> dict:
                 client.files.delete(name=uploaded_file.name)
             except Exception as delete_error:
                 print(f"Failed to delete uploaded file: {delete_error}")
+
+# AI 응답이 반드시 지켜야 할 정확한 JSON 스키마(규격) 정의
+RESUME_RESPONSE_SCHEMA = types.Schema(
+    type=types.Type.OBJECT,
+    required=["title", "content_markdown", "reasoning", "enhanced_keywords", "interview_questions"],
+    properties={
+        "title": types.Schema(type=types.Type.STRING, description="자기소개서의 전문적이고 매력적인 제목"),
+        "content_markdown": types.Schema(type=types.Type.STRING, description="마크다운 형식으로 작성된 자기소개서 본문"),
+        "reasoning": types.Schema(type=types.Type.STRING, description="사용자의 TMI와 스펙을 바탕으로 왜 이렇게 자소서를 작성했는지에 대한 설명"),
+        "enhanced_keywords": types.Schema(
+            type=types.Type.ARRAY, 
+            items=types.Schema(type=types.Type.STRING),
+            description="기업의 인재상을 바탕으로 자소서에 의도적으로 강조한 3가지 핵심 키워드"
+        ),
+        "interview_questions": types.Schema(
+            type=types.Type.ARRAY, 
+            items=types.Schema(type=types.Type.STRING),
+            description="이 자소서를 읽은 면접관이 할 법한 2개의 예상 꼬리 질문"
+        ),
+    },
+)
+
+def generate_masterpiece_resume(
+    profile_data: dict, 
+    experiences: list, 
+    company_data: dict,
+    additional_prompt: str = ""
+) -> dict:
+    """
+    사용자의 포트폴리오와 목표 기업 정보를 바탕으로 Gemini를 활용하여 맞춤형 자소서를 생성합니다.
+    """
+    # 입력값 검증 및 dict 변환
+    if not isinstance(profile_data, dict):
+        profile_data = {}
+    if not isinstance(company_data, dict):
+        company_data = {}
+    if not isinstance(experiences, list):
+        experiences = []
+    
+    # 1. 경험 데이터를 안전하게 JSON 문자열로 변환 (datetime 포함)
+    class DateTimeEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            return super().default(obj)
+    
+    try:
+        experiences_json = json.dumps(experiences, ensure_ascii=False, cls=DateTimeEncoder)
+    except Exception as e:
+        print(f"경험 데이터 JSON 변환 실패: {e}")
+        experiences_json = "[]"
+    
+    # 2. 사용자 및 기업 데이터를 활용하여 AI에게 내릴 프롬프트 구성
+    prompt = f"""
+    당신은 IT 기업의 전문 취업 컨설턴트입니다.
+    제공된 [사용자 스펙 및 경험]과 [타겟 기업 정보]를 바탕으로 실제 제출 가능한 수준의 완성도 높은 자기소개서를 마크다운 형식으로 작성해주세요.
+
+    [작성 원칙]
+    - 경험과 성과는 구체적인 수치와 기술적 행동을 포함하여 두괄식으로 서술하세요.
+    - STAR(상황, 과제, 행동, 결과) 구조를 반영하여 논리적이고 담백한 어조로 작성하세요.
+    - 상투적인 표현은 배제하고 직무 역량이 명확히 돋보이도록 구성하세요.
+
+    [타겟 기업 정보]
+    - 기업명: {company_data.get('name', '알 수 없음')}
+    - 지원 직무: {company_data.get('role', '알 수 없음')}
+    - 요구 사항: {company_data.get('requirements', '')}
+    - 핵심 가치/인재상: {company_data.get('core_values', '')}
+
+    [사용자 프로필]
+    - 학력: {profile_data.get('education', '')}
+    - 핵심 역량: {profile_data.get('core_skills_text', '')}
+
+    [사용자 경험 및 TMI]
+    {experiences_json}
+
+    [사용자 추가 요청사항]
+    {additional_prompt}
+
+    반드시 제공된 JSON 스키마 규격에 맞추어 한국어로 응답해야 합니다.
+    """
+    
+    try:
+        # 3. 구조화된 JSON 출력을 강제하는 설정과 함께 Gemini API 호출
+        print(f"[{company_data.get('name', '자소서')}] 지원을 위한 자소서 생성 중...")
+        response = client.models.generate_content(
+            model=GEMINI_MODEL_NAME,
+            contents=[prompt],
+            config=types.GenerateContentConfig(
+                temperature=0.7,  # 창의적이고 자연스러운 글쓰기를 위해 0.7로 설정
+                response_mime_type="application/json",
+                response_schema=RESUME_RESPONSE_SCHEMA,
+            ),
+        )
+        
+        # 4. JSON 형태의 문자열 응답을 파이썬 딕셔너리로 변환하여 반환
+        return json.loads(response.text)
+        
+    except Exception as e:
+        print(f"AI 자소서 생성 중 오류 발생: {e}")
+        # API 통신 실패나 에러가 났을 때 프론트엔드가 터지지 않도록 기본값 반환
+        return {
+            "title": "생성 실패", 
+            "content_markdown": "자소서 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+            "reasoning": str(e),
+            "enhanced_keywords": [],
+            "interview_questions": []
+        }

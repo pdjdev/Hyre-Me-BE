@@ -1,15 +1,16 @@
 from pathlib import Path
-from datetime import date
+from datetime import date, datetime
 from uuid import uuid4
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from sqlalchemy.inspection import inspect
 
 from app import auth, models, schemas
 from app.database import get_db
-
-from app.ai_service import extract_portfolio_data_with_ai
+from app.ai_service import extract_portfolio_data_with_ai, generate_masterpiece_resume
 
 router = APIRouter(prefix="/api")
 
@@ -26,9 +27,37 @@ RESUME_FILE_PATH_PREFIX = "/uploads/resumes"
 
 
 def _dump_model(model):
+    # 1. SQLAlchemy ORM 모델인 경우의 처리
+    if hasattr(model, "__table__"):
+        result = {}
+        mapper = inspect(model.__class__)
+        for column in mapper.columns:
+            value = getattr(model, column.name, None)
+            # 날짜 및 시간 데이터를 문자열(ISO 포맷)로 안전하게 직렬화
+            if isinstance(value, (datetime, date)):
+                value = value.isoformat()
+            result[column.name] = value
+        return result
+    
+    # 2. Pydantic v2 및 v1 모델인 경우의 처리
     if hasattr(model, "model_dump"):
         return model.model_dump()
-    return model.dict()
+    if hasattr(model, "dict"):
+        return model.dict()
+    
+    # 3. 일반 객체인 경우 내장 __dict__를 복사하여 처리
+    if hasattr(model, "__dict__"):
+        result = model.__dict__.copy()
+        result.pop('_sa_instance_state', None)  # SQLAlchemy 내부 상태 값은 제거
+        for key, value in result.items():
+            if isinstance(value, (datetime, date)):
+                result[key] = value.isoformat()
+        return result
+    
+    if isinstance(model, dict):
+        return model
+    
+    return {}
 
 
 def _dump_model_update(model):
@@ -621,18 +650,6 @@ def delete_company(
     _commit_or_rollback(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-
-@router.post("/resumes/generate", status_code=status.HTTP_501_NOT_IMPLEMENTED, summary="자소서 생성 요청", tags=["자소서"])
-def generate_resume(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
-):
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="AI 자소서 생성은 아직 준비되지 않았습니다.",
-    )
-
-
 @router.get("/resumes/{resumeId}/status", response_model=schemas.GeneratedResumeStatusResponse, summary="자소서 생성 상태 조회", tags=["자소서"])
 def get_generated_resume_status(
     resumeId: int,
@@ -708,3 +725,60 @@ def delete_generated_resume(
     db.delete(resume)
     _commit_or_rollback(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.post("/resumes/generate", response_model=schemas.GeneratedResumeResponse, summary="자소서 생성 요청", tags=["자소서"])
+def generate_resume(payload: schemas.GenerateResumeRequest, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+
+    user_id = _get_current_user_id(current_user)
+    
+    # 1. DB에서 지원하고자 하는 타겟 목표 기업 정보 로드
+    company = db.query(models.Company).filter(models.Company.id == payload.company_id, models.Company.user_id == user_id).first()
+    if not company:
+        raise _not_found("기업 정보를 찾을 수 없습니다.")
+        
+    # 2. DB에서 사용자의 기본 프로필 및 경험 데이터 로드
+    profile = _get_or_create_profile(db, user_id)
+    experiences = db.query(models.PortfolioExperience).filter(models.PortfolioExperience.user_id == user_id).all()
+    
+    # 세션 충돌 방지용 동기화 작업(merge) 수행
+    profile = db.merge(profile)
+    company = db.merge(company)
+    experiences = [db.merge(exp) for exp in experiences]
+    
+    # 3. 객체 데이터 파이썬 딕셔너리로 컴팩트하게 정리
+    profile_data = _dump_model(profile)
+    exp_data = [_dump_model(exp) for exp in experiences]
+    company_data = _dump_model(company)
+    
+    # 4. Gemini AI 자소서 생성 서비스 엔진 호출
+    ai_result = generate_masterpiece_resume(
+        profile_data=profile_data,
+        experiences=exp_data,
+        company_data=company_data,
+        additional_prompt=payload.additional_prompt or ""
+    )
+    
+    # 5. 작성 포인트와 예상 질문을 하단에 마크다운으로 합성
+    final_markdown = ai_result.get("content_markdown", "")
+    final_markdown += "\n\n---\n"
+    final_markdown += f"### 💡 AI 작성 포인트\n{ai_result.get('reasoning', '')}\n\n"
+    final_markdown += f"### 🎯 강조된 기업 핵심 키워드\n{', '.join(ai_result.get('enhanced_keywords', []))}\n\n"
+    final_markdown += "### 🎤 예상 면접 꼬리질문\n"
+    for idx, question in enumerate(ai_result.get("interview_questions", [])):
+        final_markdown += f"{idx + 1}. {question}\n"
+    
+    # 6. 완성된 자소서를 DB 테이블에 영구 저장 및 반환
+    new_resume = models.GeneratedResume(
+        user_id=user_id,
+        company_id=company.id,
+        title=ai_result.get("title", f"{company.name} 지원 자기소개서"),
+        content_markdown=final_markdown,
+        additional_prompt=payload.additional_prompt,
+        status="COMPLETED"
+    )
+    
+    db.add(new_resume)
+    _commit_or_rollback(db)
+    db.refresh(new_resume)
+    
+    return new_resume

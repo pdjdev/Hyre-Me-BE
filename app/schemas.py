@@ -237,3 +237,7 @@ class PortfolioSaveResponse(BaseModel):
     experiences: List[PortfolioExperienceResponse]
     certifications: List[PortfolioCertificationResponse]
     languages: List[PortfolioLanguageResponse]
+
+class GenerateResumeRequest(BaseModel):
+    company_id: int
+    additional_prompt: Optional[str] = None
